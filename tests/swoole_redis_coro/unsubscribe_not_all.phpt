@@ -9,42 +9,42 @@ require __DIR__ . '/../include/bootstrap.php';
 go(function () {
     $redis = new Co\Redis();
     $ret = $redis->connect(REDIS_SERVER_HOST, REDIS_SERVER_PORT);
-    assert($ret);
+    Assert::assert($ret);
 
     $ret = $redis->subscribe(['channel1', 'channel2']);
-    assert($ret);
+    Assert::assert($ret);
 
     for ($i = 0; $i < 2; ++$i)
     {
         $ret = $redis->recv();
-        assert($ret[0] == 'subscribe');
+        Assert::eq($ret[0], 'subscribe');
     }
 
     $ret = $redis->getDefer();
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $ret = $redis->set('a', '1');
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $ret = $redis->setDefer(false);
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $ret = $redis->unsubscribe(['channel1']);
-    assert($ret);
+    Assert::assert($ret);
 
     $ret = $redis->recv();
-    assert($ret[0] == 'unsubscribe');
-    assert($ret[1] == 'channel1');
-    assert($ret[2] == 1);
+    Assert::eq($ret[0], 'unsubscribe');
+    Assert::eq($ret[1], 'channel1');
+    Assert::eq($ret[2], 1);
 
     $ret = $redis->getDefer();
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $ret = $redis->set('a', '1');
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $ret = $redis->setDefer(false);
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     $redis->close();
 });

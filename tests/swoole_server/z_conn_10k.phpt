@@ -3,6 +3,10 @@ swoole_server: 10k connections
 --SKIPIF--
 <?php
 require __DIR__ . '/../include/skipif.inc';
+require __DIR__ . '/../include/config.php';
+if ((int)`ulimit -n 2>&1` < MAX_CONCURRENCY_MID * MAX_REQUESTS) {
+    skip('ulimit -n failed');
+}
 ?>
 --FILE--
 <?php
@@ -18,7 +22,7 @@ $pm->parentFunc = function () use ($pm) {
                 $client = new Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
                 $client_map["{$c}.{$n}"] = $client;
                 if ($client->connect('127.0.0.1', $pm->getFreePort(), -1)) {
-                    if (assert($client->recv() === 'Hello Swoole!')) {
+                    if (Assert::assert($client->recv() === 'Hello Swoole!')) {
                         if (++$count === MAX_CONCURRENCY_MID * MAX_REQUESTS) {
                             var_dump($count);
                             echo "DONE\n";

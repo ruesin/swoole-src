@@ -1,6 +1,5 @@
 --TEST--
-swoole_server: (length protocol) no body
-
+swoole_server/length: (length protocol) no body
 --SKIPIF--
 <?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
@@ -8,15 +7,15 @@ swoole_server: (length protocol) no body
 require __DIR__ . '/../../include/bootstrap.php';
 require __DIR__ . '/../../include/api/swoole_server/TestServer.php';
 
-class PkgServer extends TestServer
+class PkgServer_2 extends TestServer
 {
     protected $show_lost_package = true;
     function onReceive($serv, $fd, $reactor_id, $data)
     {
         static $index = 0;
         $header = unpack('nlen', $data);
-        assert(strlen($data) == 2);
-        assert($header['len'] == 2);
+        Assert::eq(strlen($data), 2);
+        Assert::eq($header['len'], 2);
         if ($index % 1000 == 0) {
             //echo "#{$header['index']} recv package. sid={$header['sid']}, length=" . strlen($data) . ", bytes={$this->recv_bytes}\n";
         }
@@ -69,7 +68,7 @@ $pm->parentFunc = function ($pid) use ($pm)
 };
 
 $pm->childFunc = function () use ($pm) {
-    $serv = new PkgServer($pm->getFreePort(), true);
+    $serv = new PkgServer_2($pm->getFreePort(), true);
     $serv->set([
         'worker_num' => 1,
         //'dispatch_mode'         => 1,

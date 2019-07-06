@@ -14,22 +14,22 @@ $pm->parentFunc = function () use ($pm) {
 
         for ($n = MAX_REQUESTS; $n--;) {
             $ret = $cli->get('/');
-            assert($ret == !($n % 2));
+            Assert::eq($ret, !($n % 2));
             if ($ret) {
-                assert($cli->body === $pm->getRandomData());
+                Assert::eq($cli->body, $pm->getRandomData());
             }
         }
 
         $pm->kill();
-        usleep(1000);
+        usleep(10000);
 
-        assert(!$cli->get('/'));
-        assert($cli->errCode === SOCKET_ECONNRESET);
-        assert($cli->statusCode === SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET);
+        Assert::assert(!$cli->get('/'));
+        Assert::eq($cli->errCode, SOCKET_ECONNREFUSED);
+        Assert::eq($cli->statusCode, SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED);
         for ($n = MAX_REQUESTS; $n--;) {
-            assert(!$cli->get('/'));
-            assert($cli->errCode === SOCKET_ECONNREFUSED);
-            assert($cli->statusCode === SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED);
+            Assert::assert(!$cli->get('/'));
+            Assert::eq($cli->errCode, SOCKET_ECONNREFUSED);
+            Assert::eq($cli->statusCode, SWOOLE_HTTP_CLIENT_ESTATUS_CONNECT_FAILED);
         }
     });
     swoole_event_wait();

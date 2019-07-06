@@ -1,5 +1,5 @@
 --TEST--
-swoole_coroutine: coro defer
+swoole_coroutine/defer: coro defer
 --SKIPIF--
 <?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
@@ -22,7 +22,7 @@ go(function () {
         });
         $obj->resource = $file = fopen(__FILE__, 'r+');
         defer(function () use ($obj) {
-            assert(is_resource($obj->resource));
+            Assert::assert(is_resource($obj->resource));
             fclose($obj->resource);
             echo "closed\n";
         });

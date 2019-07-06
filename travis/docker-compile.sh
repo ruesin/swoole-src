@@ -18,10 +18,10 @@ phpize > /dev/null && \
 --enable-http2 \
 --enable-sockets \
 --enable-mysqlnd \
+--enable-gconv \
 > /dev/null && \
 make -j8 > /dev/null | tee /tmp/compile.log && \
 (test "`cat /tmp/compile.log`"x = ""x || exit 255) && \
 make install && echo "" && \
 docker-php-ext-enable swoole && \
-echo "swoole.fast_serialize=On" >> /usr/local/etc/php/conf.d/docker-php-ext-swoole-serialize.ini && \
 php --ri swoole

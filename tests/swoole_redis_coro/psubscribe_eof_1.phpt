@@ -22,13 +22,13 @@ go(function () use ($sock, $port) {
     $redis->connect('127.0.0.1', $port);
     for ($n = 0; $n < MAX_REQUESTS; $n++) {
         $val = $redis->psubscribe(['test.*']);
-        assert($val);
+        Assert::assert($val);
         $val = $redis->recv();
-        assert($val === false);
-        assert($redis->connected === false);
-        assert(in_array($redis->errType, [SWOOLE_REDIS_ERR_IO, SWOOLE_REDIS_ERR_EOF], true));
+        Assert::false($val);
+        Assert::false($redis->connected);
+        Assert::assert(in_array($redis->errType, [SWOOLE_REDIS_ERR_IO, SWOOLE_REDIS_ERR_EOF], true));
         if ($redis->errType === SWOOLE_REDIS_ERR_IO) {
-            assert($redis->errCode === SOCKET_ECONNRESET);
+            Assert::eq($redis->errCode, SOCKET_ECONNRESET);
         }
     }
     $redis->close();

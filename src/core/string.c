@@ -21,7 +21,7 @@ swString *swString_new(size_t size)
     swString *str = sw_malloc(sizeof(swString));
     if (str == NULL)
     {
-        swWarn("malloc[1] failed.");
+        swWarn("malloc[1] failed");
         return NULL;
     }
 
@@ -32,7 +32,7 @@ swString *swString_new(size_t size)
 
     if (str->str == NULL)
     {
-        swSysError("malloc[2](%ld) failed.", size);
+        swSysWarn("malloc[2](%ld) failed", size);
         sw_free(str);
         return NULL;
     }
@@ -171,7 +171,7 @@ int swString_extend(swString *str, size_t new_size)
     char *new_str = sw_realloc(str->str, new_size);
     if (new_str == NULL)
     {
-        swSysError("realloc(%ld) failed.", new_size);
+        swSysWarn("realloc(%ld) failed", new_size);
         return SW_ERR;
     }
 
@@ -182,7 +182,7 @@ int swString_extend(swString *str, size_t new_size)
 
 char* swString_alloc(swString *str, size_t __size)
 {
-    if (str->length + __size < str->size)
+    if (str->length + __size > str->size)
     {
         if (swString_extend_align(str, str->length + __size) < 0)
         {
@@ -195,7 +195,7 @@ char* swString_alloc(swString *str, size_t __size)
     return tmp;
 }
 
-uint32_t swoole_utf8_decode(u_char **p, size_t n)
+uint32_t swoole_utf8_decode(uchar **p, size_t n)
 {
     size_t len;
     uint32_t u, i, valid;
@@ -252,9 +252,9 @@ uint32_t swoole_utf8_decode(u_char **p, size_t n)
     return 0xffffffff;
 }
 
-size_t swoole_utf8_length(u_char *p, size_t n)
+size_t swoole_utf8_length(uchar *p, size_t n)
 {
-    u_char c, *last;
+    uchar c, *last;
     size_t len;
 
     last = p + n;

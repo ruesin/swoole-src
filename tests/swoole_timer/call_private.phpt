@@ -1,10 +1,7 @@
 --TEST--
 swoole_timer: call private method
 --SKIPIF--
-<?php
-require __DIR__ . '/../include/skipif.inc';
-skip_if_in_docker('not support');
-?>
+<?php require __DIR__ . '/../include/skipif.inc'; ?>
 --FILE--
 <?php
 require __DIR__ . '/../include/bootstrap.php';
@@ -16,20 +13,41 @@ class Test
     private function bar() { }
 }
 
-fork_exec(function () {
-    swoole_timer_after(1, [Test::class, 'not_exist']);
-}, '/dev/stdout');
-fork_exec(function () {
-    swoole_timer_after(1, [Test::class, 'foo']);
-}, '/dev/stdout');
-fork_exec(function () {
-    swoole_timer_after(1, [new Test, 'bar']);
-}, '/dev/stdout');
+swoole_fork_exec(function () {
+    Swoole\Timer::After(1, [Test::class, 'not_exist']);
+});
+swoole_fork_exec(function () {
+    Swoole\Timer::After(1, [Test::class, 'foo']);
+});
+swoole_fork_exec(function () {
+    Swoole\Timer::After(1, [new Test, 'bar']);
+});
 
 ?>
 --EXPECTF--
-Warning: swoole_timer_after() expects parameter 2 to be a valid callback, class 'Test' does not have a method 'not_exist' in %s/tests/swoole_timer/call_private.php on line 12
+Fatal error: Uncaught TypeError: Argument 2 passed to Swoole\Timer::after() must be callable, array given in %s/tests/swoole_timer/call_private.php:%d
+Stack trace:
+#0 %s/tests/swoole_timer/call_private.php(%d): Swoole\Timer::after(1, Array)
+#1 [internal function]: {closure}(Object(Swoole\Process))
+#2 %s/tests/include/functions.php(%d): Swoole\Process->start()
+#3 %s/tests/swoole_timer/call_private.php(%d): swoole_fork_exec(Object(Closure))
+#4 {main}
+  thrown in %s/tests/swoole_timer/call_private.php on line %d
 
-Warning: swoole_timer_after() expects parameter 2 to be a valid callback, cannot access private method Test::foo() in %s/tests/swoole_timer/call_private.php on line 15
+Fatal error: Uncaught TypeError: Argument 2 passed to Swoole\Timer::after() must be callable, array given in %s/tests/swoole_timer/call_private.php:%d
+Stack trace:
+#0 %s/tests/swoole_timer/call_private.php(%d): Swoole\Timer::after(1, Array)
+#1 [internal function]: {closure}(Object(Swoole\Process))
+#2 %s/tests/include/functions.php(%d): Swoole\Process->start()
+#3 %s/tests/swoole_timer/call_private.php(%d): swoole_fork_exec(Object(Closure))
+#4 {main}
+  thrown in %s/tests/swoole_timer/call_private.php on line %d
 
-Warning: swoole_timer_after() expects parameter 2 to be a valid callback, cannot access private method Test::bar() in %s/tests/swoole_timer/call_private.php on line 18
+Fatal error: Uncaught TypeError: Argument 2 passed to Swoole\Timer::after() must be callable, array given in %s/tests/swoole_timer/call_private.php:%d
+Stack trace:
+#0 %s/tests/swoole_timer/call_private.php(%d): Swoole\Timer::after(1, Array)
+#1 [internal function]: {closure}(Object(Swoole\Process))
+#2 %s/tests/include/functions.php(%d): Swoole\Process->start()
+#3 %s/tests/swoole_timer/call_private.php(%d): swoole_fork_exec(Object(Closure))
+#4 {main}
+  thrown in %s/tests/swoole_timer/call_private.php on line %d

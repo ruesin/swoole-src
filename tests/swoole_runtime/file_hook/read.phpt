@@ -1,5 +1,5 @@
 --TEST--
-swoole_runtime: read file
+swoole_runtime/file_hook: read file
 --SKIPIF--
 <?php
 require __DIR__ . '/../../include/skipif.inc';
@@ -46,11 +46,10 @@ foreach ($files as $k => $v)
 {
     go(function () use ($v, $k) {
         $content = readfile_co($v['file']);
-        assert(md5($content) == $v['hash']);
+        Assert::eq(md5($content), $v['hash']);
     });
 }
 
 swoole_event_wait();
 ?>
 --EXPECT--
-

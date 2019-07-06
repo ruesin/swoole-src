@@ -1,5 +1,5 @@
 --TEST--
-swoole_server: kill task worker [SWOOLE_PROCESS]
+swoole_server/task: kill task worker [SWOOLE_PROCESS]
 --SKIPIF--
 <?php
 require __DIR__ . '/../../include/skipif.inc';
@@ -20,7 +20,7 @@ $pm->parentFunc = function ($pid) use ($pm) {
         kill_process_by_name(PROC_NAME);
         usleep(10000);
         //判断进程是否存在
-        assert(get_process_pid_by_name(PROC_NAME) > 0);
+        Assert::assert(get_process_pid_by_name(PROC_NAME) > 0);
     }
     $pm->kill();
 };

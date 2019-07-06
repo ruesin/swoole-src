@@ -10,12 +10,12 @@ $pm->parentFunc = function () use ($pm) {
     go(function () use ($pm) {
         $cli = new Swoole\Coroutine\Http\Client('127.0.0.1', $pm->getFreePort());
         $cookie = '123_,; abc';
-        assert($cli->get('/?cookie=' . urlencode($cookie)));
-        assert($cli->statusCode === 200);
-        assert($cli->set_cookie_headers ===
+        Assert::assert($cli->get('/?cookie=' . urlencode($cookie)));
+        Assert::eq($cli->statusCode, 200);
+        Assert::assert($cli->set_cookie_headers ===
             [
-                'cookie' => 'cookie=' . urlencode($cookie),
-                'rawcookie' => 'rawcookie=' . $cookie,
+                'cookie=' . urlencode($cookie),
+                'rawcookie=' . $cookie,
             ]
         );
     });
@@ -23,12 +23,12 @@ $pm->parentFunc = function () use ($pm) {
         go(function () use ($pm) {
             $cli = new Swoole\Coroutine\Http\Client('127.0.0.1', $pm->getFreePort());
             $random = get_safe_random();
-            assert($cli->get('/?cookie=' . $random));
-            assert($cli->statusCode === 200);
-            assert($cli->set_cookie_headers ===
+            Assert::assert($cli->get('/?cookie=' . $random));
+            Assert::eq($cli->statusCode, 200);
+            Assert::assert($cli->set_cookie_headers ===
                 [
-                    'cookie' => 'cookie=' . urlencode($random),
-                    'rawcookie' => 'rawcookie=' . $random
+                    'cookie=' . urlencode($random),
+                    'rawcookie=' . $random
                 ]
             );
         });

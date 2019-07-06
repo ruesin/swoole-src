@@ -58,7 +58,7 @@ Content-Length: {$content_length}{$CR}
 {$post}
 HTTP;
 
-    assert($client->send($data));
+    Assert::assert($client->send($data));
     $data = '';
     while ($ret = $client->recv()) {
         $data .= $ret;
@@ -78,7 +78,7 @@ $pm->parentFunc = function () use ($pm) {
             $post = getRandomData(100);
             $ret = sendData('127.0.0.1', $pm->getFreePort(), $get, $post);
             list($_, $body) = explode("\r\n\r\n", $ret);
-            assert($body === var_dump_return($get, $post));
+            Assert::eq($body, var_dump_return($get, $post));
         }
         $pm->kill();
         echo "DONE\n";

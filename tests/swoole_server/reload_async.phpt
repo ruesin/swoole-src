@@ -12,7 +12,7 @@ require __DIR__ . '/../include/bootstrap.php';
 $reloaded = new Swoole\Atomic;
 $workerCounter = new Swoole\Atomic;
 
-$pm = new ProcessManager;
+$pm = new SwooleTest\ProcessManager;
 $pm->setWaitTimeout(-1);
 $pm->parentFunc = function () use ($pm) {
     $pm->kill();
@@ -43,7 +43,7 @@ $pm->childFunc = function () use ($pm, $reloaded, $workerCounter) {
                 $pm->wakeup();
             });
             echo "RELOAD\n";
-            assert($server->reload());
+            Assert::assert($server->reload());
         }
     });
     $server->on('Receive', function () { });

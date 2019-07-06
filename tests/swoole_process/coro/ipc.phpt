@@ -1,5 +1,5 @@
 --TEST--
-swoole_process: ipc with coroutine
+swoole_process/coro: ipc with coroutine
 --SKIPIF--
 <?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
@@ -13,7 +13,7 @@ $proc1 = new \swoole_process(function (swoole_process $proc) {
     echo "proc1 stop\n";
 }, false, 1, true);
 
-assert($proc1->start());
+Assert::assert($proc1->start());
 
 $proc2 = new \swoole_process(function (swoole_process $proc) use ($proc1) {
     Co::sleep(0.01);
@@ -23,7 +23,7 @@ $proc2 = new \swoole_process(function (swoole_process $proc) use ($proc1) {
     echo "proc2 stop\n";
 }, false, 0, true);
 
-assert($proc2->start());
+Assert::assert($proc2->start());
 
 swoole_process::wait(true);
 swoole_process::wait(true);
@@ -34,4 +34,3 @@ hello proc1
 proc1 stop
 hello proc2
 proc2 stop
-

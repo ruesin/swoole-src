@@ -19,22 +19,21 @@
 
 static int swSystemTimer_signal_set(swTimer *timer, long interval);
 static int swSystemTimer_set(swTimer *timer, long new_interval);
-static void swSystemTimer_free(swTimer *timer);
+static void swSystemTimer_close(swTimer *timer);
 
 /**
  * create timer
  */
-int swSystemTimer_init(int interval)
+int swSystemTimer_init(swTimer *timer, long interval)
 {
-    swTimer *timer = &SwooleG.timer;
+    timer->set = swSystemTimer_set;
+    timer->close = swSystemTimer_close;
     timer->lasttime = interval;
     if (swSystemTimer_signal_set(timer, interval) < 0)
     {
         return SW_ERR;
     }
     swSignal_add(SIGALRM, swSystemTimer_signal_handler);
-    timer->set = swSystemTimer_set;
-    timer->free = swSystemTimer_free;
     return SW_OK;
 }
 
@@ -43,17 +42,16 @@ int swSystemTimer_init(int interval)
  */
 static int swSystemTimer_signal_set(swTimer *timer, long interval)
 {
-    struct itimerval timer_set;
+    struct itimerval timer_set = {{0}};
     int sec = interval / 1000;
-    int msec = (((float) interval / 1000) - sec) * 1000;
+    int msec = interval % 1000;
 
     struct timeval now;
     if (gettimeofday(&now, NULL) < 0)
     {
-        swWarn("gettimeofday() failed. Error: %s[%d]", strerror(errno), errno);
+        swSysWarn("gettimeofday() failed");
         return SW_ERR;
     }
-    bzero(&timer_set, sizeof(timer_set));
 
     if (interval > 0)
     {
@@ -72,13 +70,13 @@ static int swSystemTimer_signal_set(swTimer *timer, long interval)
 
     if (setitimer(ITIMER_REAL, &timer_set, NULL) < 0)
     {
-        swWarn("setitimer() failed. Error: %s[%d]", strerror(errno), errno);
+        swSysWarn("setitimer() failed");
         return SW_ERR;
     }
     return SW_OK;
 }
 
-void swSystemTimer_free(swTimer *timer)
+static void swSystemTimer_close(swTimer *timer)
 {
     swSystemTimer_signal_set(timer, -1);
 }

@@ -1,7 +1,7 @@
 --TEST--
-swoole_feature: cross_close: http client
+swoole_feature/cross_close: http client
 --SKIPIF--
-<?php require __DIR__ . '/../../include/config.php'; ?>
+<?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
 <?php
 require __DIR__ . '/../../include/bootstrap.php';
@@ -17,11 +17,11 @@ $pm->parentFunc = function () use ($pm) {
             $pm->kill();
             echo "DONE\n";
         });
-        assert(!$http->get('/'));
+        Assert::assert(!$http->get('/'));
         echo "CLOSED\n";
-        assert($http->statusCode === SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET);
-        assert($http->errCode === SOCKET_ECONNRESET);
-        assert(empty($http->body));
+        Assert::eq($http->statusCode, SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET);
+        Assert::eq($http->errCode, SOCKET_ECONNRESET);
+        Assert::assert(empty($http->body));
     });
 };
 $pm->childFunc = function () use ($pm) {

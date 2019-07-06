@@ -14,7 +14,7 @@
   +----------------------------------------------------------------------+
 */
 
-#include "api.h"
+#include "swoole_api.h"
 #include "wrapper/base.hpp"
 #include "server.h"
 
@@ -32,7 +32,7 @@ long swoole_timer_add(long ms, uchar persistent, swTimerCallback callback, void 
     swTimer_node *tnode = swTimer_add(&SwooleG.timer, ms, persistent, private_data, callback);
     if (tnode == nullptr)
     {
-        swWarn("addtimer failed.");
+        swWarn("addtimer failed");
         return SW_ERR;
     }
     else
@@ -59,7 +59,7 @@ uchar swoole_timer_exists(long timer_id)
         return false;
     }
     auto tnode = swTimer_get(&SwooleG.timer, timer_id);
-    return (tnode && !tnode->remove);
+    return (tnode && !tnode->removed);
 }
 
 uchar swoole_timer_clear(long timer_id)

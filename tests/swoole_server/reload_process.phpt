@@ -32,15 +32,15 @@ $pm->parentFunc = function () use ($pm) {
     /**@var $counter Swoole\Atomic[] */
     $total = $counter['worker']->get() - $worker_num;
     $expect = $random * $worker_num;
-    assert($total === $expect, "[worker reload {$total} but expect {$expect}]");
+    Assert::eq($total, $expect, "[worker reload {$total} but expect {$expect}]");
 
     $total = $counter['task_worker']->get() - $task_worker_num;
     $expect = $random * $task_worker_num * 2;
-    assert($total === $expect, "[task worker reload {$total} but expect {$expect}]");
+    Assert::eq($total, $expect, "[task worker reload {$total} but expect {$expect}]");
 
     $log = file_get_contents(TEST_LOG_FILE);
-    $log = trim(preg_replace('/.+?\s+?NOTICE\s+?.+/', '', $log));
-    if (!assert(empty($log))){
+    $log = trim(preg_replace('/.+?\s+?INFO\s+?.+/', '', $log));
+    if (!Assert::assert(empty($log))){
         var_dump($log);
     }
     $pm->kill();

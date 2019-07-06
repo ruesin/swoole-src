@@ -10,11 +10,11 @@ $pm = new ProcessManager;
 $pm->parentFunc = function () use ($pm) {
     go(function () use ($pm) {
         $cli = new Swoole\Coroutine\Http\Client('127.0.0.1', $pm->getFreePort());
-        assert($cli->get('/'));
-        assert($cli->statusCode === 200);
-        assert($cli->set_cookie_headers ===
+        Assert::assert($cli->get('/'));
+        Assert::eq($cli->statusCode, 200);
+        Assert::assert($cli->set_cookie_headers ===
             [
-                'name' => 'name=' . urlencode(COOKIE),
+                'name=' . urlencode(COOKIE),
             ]
         );
     });

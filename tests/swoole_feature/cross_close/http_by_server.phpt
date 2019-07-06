@@ -1,7 +1,7 @@
 --TEST--
-swoole_feature: cross_close: http client closed by server
+swoole_feature/cross_close: http client closed by server
 --SKIPIF--
-<?php require __DIR__ . '/../../include/config.php'; ?>
+<?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
 <?php
 require __DIR__ . '/../../include/bootstrap.php';
@@ -10,11 +10,11 @@ $pm->parentFunc = function () use ($pm) {
     go(function () use ($pm) {
         $http = new Co\Http\Client('127.0.0.1', $pm->getFreePort());
         echo "GET\n";
-        assert(!$http->get('/'));
+        Assert::assert(!$http->get('/'));
         echo "CLOSED\n";
-        assert($http->statusCode === SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET);
-        assert($http->errCode === SOCKET_ECONNRESET);
-        assert(empty($http->body));
+        Assert::eq($http->statusCode, SWOOLE_HTTP_CLIENT_ESTATUS_SERVER_RESET);
+        Assert::eq($http->errCode, SOCKET_ECONNRESET);
+        Assert::assert(empty($http->body));
         $pm->kill();
     });
 };

@@ -1,5 +1,5 @@
 --TEST--
-swoole_process: start with coroutine
+swoole_process/coro: start with coroutine
 --SKIPIF--
 <?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
@@ -12,7 +12,7 @@ $proc = new \swoole_process(function () {
 }, false, 1, true);
 
 $r = $proc->start();
-assert($r > 0);
+Assert::assert($r > 0);
 $proc->close();
 
 \swoole_process::wait(true);

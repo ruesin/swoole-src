@@ -13,19 +13,19 @@ $pm->parentFunc = function () use ($pm) {
     go(function () use ($pm) {
         $redis = new Swoole\Coroutine\Redis;
         $ret = $redis->connect('127.0.0.1', $pm->getFreePort());
-        assert($ret);
+        Assert::assert($ret);
         $ret = $redis->set('random_val', $random = get_safe_random(128));
-        assert($ret);
+        Assert::assert($ret);
         $ret = $redis->get('random_val');
-        assert($ret and $ret === $random);
+        Assert::eq($ret and $ret, $random);
         $pm->kill();
-        assert(!$redis->get('random_val'));
-        assert($redis->errCode === SOCKET_ECONNRESET);
+        Assert::assert(!$redis->get('random_val'));
+        Assert::eq($redis->errCode, SOCKET_ECONNRESET);
         for ($n = MAX_REQUESTS; $n--;) {
-            assert(!$redis->set('random_val', get_safe_random(128)));
-            assert($redis->errCode === SOCKET_ECONNREFUSED);
-            assert(!$redis->get('random_val'));
-            assert($redis->errCode === SOCKET_ECONNREFUSED);
+            Assert::assert(!$redis->set('random_val', get_safe_random(128)));
+            Assert::eq($redis->errCode, SOCKET_ECONNREFUSED);
+            Assert::assert(!$redis->get('random_val'));
+            Assert::eq($redis->errCode, SOCKET_ECONNREFUSED);
         }
     });
 };

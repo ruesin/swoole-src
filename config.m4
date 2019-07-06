@@ -15,10 +15,10 @@ dnl  +----------------------------------------------------------------------+
 dnl  | Author: Tianfeng Han  <mikan.tenny@gmail.com>                        |
 dnl  +----------------------------------------------------------------------+
 
-PHP_ARG_ENABLE(debug-log, whether to enable debug log,
+PHP_ARG_ENABLE(debug-log, enable debug log,
 [  --enable-debug-log        Enable swoole debug log], no, no)
 
-PHP_ARG_ENABLE(trace-log, Whether to enable trace log,
+PHP_ARG_ENABLE(trace-log, enable trace log,
 [  --enable-trace-log        Enable swoole trace log], no, no)
 
 PHP_ARG_ENABLE(sockets, enable sockets support,
@@ -36,9 +36,6 @@ PHP_ARG_ENABLE(swoole, swoole support,
 PHP_ARG_ENABLE(mysqlnd, enable mysqlnd support,
 [  --enable-mysqlnd          Do you have mysqlnd?], no, no)
 
-PHP_ARG_ENABLE(coroutine-postgresql, enable coroutine postgresql support,
-[  --enable-coroutine-postgresql    Do you install postgresql?], no, no)
-
 PHP_ARG_WITH(openssl_dir, dir of openssl,
 [  --with-openssl-dir[=DIR]    Include OpenSSL support (requires OpenSSL >= 0.9.6)], no, no)
 
@@ -48,11 +45,11 @@ PHP_ARG_WITH(phpx_dir, dir of php-x,
 PHP_ARG_WITH(jemalloc_dir, dir of jemalloc,
 [  --with-jemalloc-dir[=DIR]   Include jemalloc support], no, no)
 
-PHP_ARG_WITH(libpq_dir, dir of libpq,
-[  --with-libpq-dir[=DIR]      Include libpq support (requires libpq >= 9.5)], no, no)
-
-PHP_ARG_ENABLE(asan, whether to enable asan,
+PHP_ARG_ENABLE(asan, enable asan,
 [  --enable-asan             Enable asan], no, no)
+
+PHP_ARG_ENABLE(gcov, enable gcov,
+[  --enable-gcov             Enable gcov], no, no)
 
 AC_DEFUN([SWOOLE_HAVE_PHP_EXT], [
     extname=$1
@@ -156,23 +153,6 @@ AC_DEFUN([AC_SWOOLE_HAVE_UCONTEXT],
     ])
 ])
 
-AC_DEFUN([AC_SWOOLE_HAVE_BOOST_CONTEXT],
-[
-    AC_MSG_CHECKING([for boost.context])
-    AC_LANG([C++])
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-        #include <boost/context/all.hpp>
-    ]], [[
-
-    ]])],[
-        AC_DEFINE([HAVE_BOOST_CONTEXT], 1, [have boost.context?])
-        SW_HAVE_BOOST_CONTEXT=yes
-        AC_MSG_RESULT([yes])
-    ],[
-        AC_MSG_RESULT([no])
-    ])
-])
-
 AC_DEFUN([AC_SWOOLE_HAVE_VALGRIND],
 [
     AC_MSG_CHECKING([for valgrind])
@@ -187,6 +167,84 @@ AC_DEFUN([AC_SWOOLE_HAVE_VALGRIND],
     ],[
         AC_MSG_RESULT([no])
     ])
+])
+
+AC_DEFUN([AC_SWOOLE_CHECK_SOCKETS], [
+    dnl Check for struct cmsghdr
+    AC_CACHE_CHECK([for struct cmsghdr], ac_cv_cmsghdr,
+    [
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/types.h>
+#include <sys/socket.h>]], [[struct cmsghdr s; s]])], [ac_cv_cmsghdr=yes], [ac_cv_cmsghdr=no])
+    ])
+
+    if test "$ac_cv_cmsghdr" = yes; then
+        AC_DEFINE(HAVE_CMSGHDR,1,[Whether you have struct cmsghdr])
+    fi
+
+    AC_CHECK_FUNCS([hstrerror socketpair if_nametoindex if_indextoname])
+    AC_CHECK_HEADERS([netdb.h netinet/tcp.h sys/un.h sys/sockio.h])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/types.h>
+#include <sys/socket.h>
+    ]], [[static struct msghdr tp; int n = (int) tp.msg_flags; return n]])],[],
+        [AC_DEFINE(MISSING_MSGHDR_MSGFLAGS, 1, [ ])]
+    )
+    AC_DEFINE([HAVE_SOCKETS], 1, [ ])
+
+    dnl Check for fied ss_family in sockaddr_storage (missing in AIX until 5.3)
+    AC_CACHE_CHECK([for field ss_family in struct sockaddr_storage], ac_cv_ss_family,
+    [
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+    ]], [[struct sockaddr_storage sa_store; sa_store.ss_family = AF_INET6;]])],
+        [ac_cv_ss_family=yes], [ac_cv_ss_family=no])
+    ])
+
+    if test "$ac_cv_ss_family" = yes; then
+        AC_DEFINE(HAVE_SA_SS_FAMILY,1,[Whether you have sockaddr_storage.ss_family])
+    fi
+
+    dnl Check for AI_V4MAPPED flag
+    AC_CACHE_CHECK([if getaddrinfo supports AI_V4MAPPED],[ac_cv_gai_ai_v4mapped],
+    [
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <netdb.h>
+    ]], [[int flag = AI_V4MAPPED;]])],
+        [ac_cv_gai_ai_v4mapped=yes], [ac_cv_gai_ai_v4mapped=no])
+    ])
+
+    if test "$ac_cv_gai_ai_v4mapped" = yes; then
+        AC_DEFINE(HAVE_AI_V4MAPPED,1,[Whether you have AI_V4MAPPED])
+    fi
+
+    dnl Check for AI_ALL flag
+    AC_CACHE_CHECK([if getaddrinfo supports AI_ALL],[ac_cv_gai_ai_all],
+    [
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <netdb.h>
+    ]], [[int flag = AI_ALL;]])],
+        [ac_cv_gai_ai_all=yes], [ac_cv_gai_ai_all=no])
+    ])
+
+    if test "$ac_cv_gai_ai_all" = yes; then
+        AC_DEFINE(HAVE_AI_ALL,1,[Whether you have AI_ALL])
+    fi
+
+    dnl Check for AI_IDN flag
+    AC_CACHE_CHECK([if getaddrinfo supports AI_IDN],[ac_cv_gai_ai_idn],
+    [
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <netdb.h>
+    ]], [[int flag = AI_IDN;]])],
+            [ac_cv_gai_ai_idn=yes], [ac_cv_gai_ai_idn=no])
+    ])
+
+    if test "$ac_cv_gai_ai_idn" = yes; then
+        AC_DEFINE(HAVE_AI_IDN,1,[Whether you have AI_IDN])
+    fi
 ])
 
 AC_MSG_CHECKING([if compiling with clang])
@@ -228,7 +286,6 @@ if test "$PHP_SWOOLE" != "no"; then
     AC_CHECK_LIB(pthread, pthread_mutex_timedlock, AC_DEFINE(HAVE_MUTEX_TIMEDLOCK, 1, [have pthread_mutex_timedlock]))
     AC_CHECK_LIB(pthread, pthread_barrier_init, AC_DEFINE(HAVE_PTHREAD_BARRIER, 1, [have pthread_barrier_init]))
     AC_CHECK_LIB(pcre, pcre_compile, AC_DEFINE(HAVE_PCRE, 1, [have pcre]))
-    AC_CHECK_LIB(pq, PQconnectdb, AC_DEFINE(HAVE_POSTGRESQL, 1, [have postgresql]))
 
     AC_CHECK_LIB(brotlienc, BrotliEncoderCreateInstance, [
         AC_DEFINE(SW_HAVE_BROTLI, 1, [have brotli])
@@ -257,6 +314,13 @@ if test "$PHP_SWOOLE" != "no"; then
     if test "$PHP_ASAN" != "no"; then
         PHP_DEBUG=1
         CFLAGS="$CFLAGS -fsanitize=address -fno-omit-frame-pointer"
+        CXXFLAGS="$CXXFLAGS -fsanitize=address -fno-omit-frame-pointer"
+    fi
+    
+    if test "$PHP_GCOV" != "no"; then
+        PHP_DEBUG=1
+        CFLAGS="$CFLAGS -fprofile-arcs -ftest-coverage"
+        CXXFLAGS="$CXXFLAGS -fprofile-arcs -ftest-coverage"
     fi
 
     if test "$PHP_TRACE_LOG" != "no"; then
@@ -288,8 +352,8 @@ if test "$PHP_SWOOLE" != "no"; then
     AC_SWOOLE_HAVE_REUSEPORT
     AC_SWOOLE_HAVE_FUTEX
     AC_SWOOLE_HAVE_UCONTEXT
-    AC_SWOOLE_HAVE_BOOST_CONTEXT
     AC_SWOOLE_HAVE_VALGRIND
+    AC_SWOOLE_CHECK_SOCKETS
 
     AS_CASE([$host_os],
       [darwin*], [SW_OS="MAC"],
@@ -342,7 +406,7 @@ if test "$PHP_SWOOLE" != "no"; then
 
     PHP_ADD_LIBRARY(pthread, 1, SWOOLE_SHARED_LIBADD)
 
-    if test "$PHP_HTTP2" = "yes"; then
+    if test "$PHP_HTTP2" = "yes" || test "$PHP_NGHTTP2_DIR" != "no"; then
         AC_DEFINE(SW_USE_HTTP2, 1, [enable HTTP2 support])
     fi
 
@@ -351,36 +415,8 @@ if test "$PHP_SWOOLE" != "no"; then
         AC_DEFINE(SW_USE_MYSQLND, 1, [use mysqlnd])
     fi
 
-    if test "$PHP_COROUTINE_POSTGRESQL" = "yes"; then
-        if test "$PHP_LIBPQ" != "no" || test "$PHP_LIBPQ_DIR" != "no"; then
-            if test "$PHP_LIBPQ_DIR" != "no"; then
-                AC_DEFINE(HAVE_LIBPQ, 1, [have libpq])
-                AC_MSG_RESULT(libpq include success)
-                PHP_ADD_INCLUDE("${PHP_LIBPQ_DIR}/include")
-                PHP_ADD_LIBRARY_WITH_PATH(pq, "${PHP_LIBPQ_DIR}/${PHP_LIBDIR}")
-                PGSQL_INCLUDE=$PHP_LIBPQ_DIR/include
-            else
-                PGSQL_SEARCH_PATHS="/usr /usr/local /usr/local/pgsql"
-                for i in $PGSQL_SEARCH_PATHS; do
-                    for j in include include/pgsql include/postgres include/postgresql ""; do
-                        if test -r "$i/$j/libpq-fe.h"; then
-                            PGSQL_INC_BASE=$i
-                            PGSQL_INCLUDE=$i/$j
-                            AC_MSG_RESULT(libpq-fe.h found in PGSQL_INCLUDE)
-                            PHP_ADD_INCLUDE("${PGSQL_INCLUDE}")
-                        fi
-                    done
-                done
-            fi
-            AC_DEFINE(SW_USE_POSTGRESQL, 1, [enable coroutine-postgresql support])
-            PHP_ADD_LIBRARY(pq, 1, SWOOLE_SHARED_LIBADD)
-        fi
-        if test -z "$PGSQL_INCLUDE"; then
-           AC_MSG_ERROR(Cannot find libpq-fe.h. Please confirm the libpq or specify correct PostgreSQL(libpq) installation path)
-        fi
-    fi
-
     swoole_source_file=" \
+        php_swoole_cxx.cc \
         src/core/array.c \
         src/core/base.c \
         src/core/channel.c \
@@ -394,11 +430,12 @@ if test "$PHP_SWOOLE" != "no"; then
         src/core/socket.c \
         src/core/string.c \
         src/coroutine/base.cc \
-        src/coroutine/boost.cc \
         src/coroutine/channel.cc \
         src/coroutine/context.cc \
+        src/coroutine/file_lock.cc \
         src/coroutine/hook.cc \
         src/coroutine/socket.cc \
+        src/coroutine/system.cc \
         src/coroutine/ucontext.cc \
         src/lock/atomic.c \
         src/lock/cond.c \
@@ -431,7 +468,7 @@ if test "$PHP_SWOOLE" != "no"; then
         src/pipe/base.c \
         src/pipe/eventfd.c \
         src/pipe/unix_socket.c \
-        src/protocol/base.c \
+        src/protocol/base.cc \
         src/protocol/base64.c \
         src/protocol/http.c \
         src/protocol/http2.c \
@@ -442,8 +479,7 @@ if test "$PHP_SWOOLE" != "no"; then
         src/protocol/socks5.c \
         src/protocol/ssl.c \
         src/protocol/websocket.c \
-        src/reactor/base.c \
-        src/reactor/defer_task.cc \
+        src/reactor/base.cc \
         src/reactor/epoll.c \
         src/reactor/kqueue.c \
         src/reactor/poll.c \
@@ -452,15 +488,16 @@ if test "$PHP_SWOOLE" != "no"; then
         src/server/manager.cc \
         src/server/master.cc \
         src/server/port.c \
-        src/server/process.c \
+        src/server/process.cc \
         src/server/reactor_process.cc \
-        src/server/reactor_thread.c \
+        src/server/reactor_thread.cc \
+        src/server/static_handler.cc \
         src/server/task_worker.c \
         src/server/worker.cc \
         src/wrapper/client.cc \
         src/wrapper/server.cc \
         src/wrapper/timer.cc \
-        swoole.c \
+        swoole.cc \
         swoole_async_coro.cc \
         swoole_atomic.c \
         swoole_buffer.c \
@@ -468,21 +505,24 @@ if test "$PHP_SWOOLE" != "no"; then
         swoole_client.cc \
         swoole_client_coro.cc \
         swoole_coroutine.cc \
-        swoole_coroutine_util.cc \
-        swoole_event.c \
+        swoole_coroutine_scheduler.cc \
+        swoole_coroutine_system.cc \
+        swoole_event.cc \
+        swoole_http2_client_coro.cc \
+        swoole_http2_server.cc \
         swoole_http_client_coro.cc \
+        swoole_http_request.cc \
+        swoole_http_response.cc \
         swoole_http_server.cc \
-        swoole_http_v2_client_coro.cc \
-        swoole_http_v2_server.cc \
+        swoole_http_server_coro.cc \
         swoole_lock.c \
         swoole_mysql_coro.cc \
-        swoole_postgresql_coro.cc \
+        swoole_mysql_proto.cc \
         swoole_process.cc \
         swoole_process_pool.cc \
         swoole_redis_coro.cc \
         swoole_redis_server.cc \
         swoole_runtime.cc \
-        swoole_serialize.c \
         swoole_server.cc \
         swoole_server_port.cc \
         swoole_socket_coro.cc \
@@ -492,23 +532,31 @@ if test "$PHP_SWOOLE" != "no"; then
         swoole_websocket_server.cc"
 
     swoole_source_file="$swoole_source_file \
-    thirdparty/swoole_http_parser.c \
-    thirdparty/multipart_parser.c"
+        thirdparty/php/sockets/multicast.cc \
+        thirdparty/php/sockets/sendrecvmsg.cc \
+        thirdparty/php/sockets/conversions.cc \
+        thirdparty/php/sockets/sockaddr_conv.cc \
+        thirdparty/php/standard/proc_open.cc"
+
+    swoole_source_file="$swoole_source_file \
+        thirdparty/swoole_http_parser.c \
+	    thirdparty/multipart_parser.c"
 
     swoole_source_file="$swoole_source_file \
         thirdparty/hiredis/async.c \
         thirdparty/hiredis/hiredis.c \
         thirdparty/hiredis/net.c \
         thirdparty/hiredis/read.c \
-        thirdparty/hiredis/sds.c \
-        thirdparty/http2/nghttp2_hd.c \
-        thirdparty/http2/nghttp2_rcbuf.c \
-        thirdparty/http2/nghttp2_helper.c \
-        thirdparty/http2/nghttp2_buf.c \
-        thirdparty/http2/nghttp2_mem.c \
-        thirdparty/http2/nghttp2_hd_huffman.c \
-        thirdparty/http2/nghttp2_hd_huffman_data.c \
-        "
+        thirdparty/hiredis/sds.c"
+
+    swoole_source_file="$swoole_source_file \
+        thirdparty/nghttp2/nghttp2_hd.c \
+        thirdparty/nghttp2/nghttp2_rcbuf.c \
+        thirdparty/nghttp2/nghttp2_helper.c \
+        thirdparty/nghttp2/nghttp2_buf.c \
+        thirdparty/nghttp2/nghttp2_mem.c \
+        thirdparty/nghttp2/nghttp2_hd_huffman.c \
+        thirdparty/nghttp2/nghttp2_hd_huffman_data.c"
 
     SW_NO_USE_ASM_CONTEXT="no"
     SW_ASM_DIR="thirdparty/boost/asm/"
@@ -516,7 +564,9 @@ if test "$PHP_SWOOLE" != "no"; then
     AS_CASE([$host_cpu],
       [x86_64*], [SW_CPU="x86_64"],
       [x86*], [SW_CPU="x86"],
+      [i?86*], [SW_CPU="x86"],
       [arm*], [SW_CPU="arm"],
+      [aarch64*], [SW_CPU="arm64"],
       [arm64*], [SW_CPU="arm64"],
       [
         SW_NO_USE_ASM_CONTEXT="yes"
@@ -573,22 +623,25 @@ if test "$PHP_SWOOLE" != "no"; then
         swoole_source_file="$swoole_source_file \
             ${SW_ASM_DIR}make_${SW_CONTEXT_ASM_FILE} \
             ${SW_ASM_DIR}jump_${SW_CONTEXT_ASM_FILE} "
-    elif test "$SW_HAVE_BOOST_CONTEXT" = "yes"; then
-         LDFLAGS="$LDFLAGS -lboost_context"
     fi
 
     PHP_NEW_EXTENSION(swoole, $swoole_source_file, $ext_shared,,, cxx)
 
     PHP_ADD_INCLUDE([$ext_srcdir])
     PHP_ADD_INCLUDE([$ext_srcdir/include])
-
     PHP_ADD_INCLUDE([$ext_srcdir/thirdparty/hiredis])
 
     PHP_INSTALL_HEADERS([ext/swoole], [*.h config.h include/*.h thirdparty/*.h thirdparty/hiredis/*.h])
 
     PHP_REQUIRE_CXX()
-    
-    CXXFLAGS="$CXXFLAGS -Wall -Wno-unused-function -Wno-deprecated -Wno-deprecated-declarations -std=c++11"
+
+    CXXFLAGS="$CXXFLAGS -Wall -Wno-unused-function -Wno-deprecated -Wno-deprecated-declarations"
+
+    if test "$SW_OS" = "CYGWIN" || test "$SW_OS" = "MINGW"; then
+        CXXFLAGS="$CXXFLAGS -std=gnu++11"
+    else
+        CXXFLAGS="$CXXFLAGS -std=c++11"
+    fi
 
     PHP_ADD_BUILD_DIR($ext_builddir/src/core)
     PHP_ADD_BUILD_DIR($ext_builddir/src/memory)
@@ -601,8 +654,10 @@ if test "$PHP_SWOOLE" != "no"; then
     PHP_ADD_BUILD_DIR($ext_builddir/src/protocol)
     PHP_ADD_BUILD_DIR($ext_builddir/src/coroutine)
     PHP_ADD_BUILD_DIR($ext_builddir/src/wrapper)
-    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/hiredis)
-    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/http2)
     PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/boost)
     PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/boost/asm)
+    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/hiredis)
+    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/nghttp2)
+    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/php/sockets)
+    PHP_ADD_BUILD_DIR($ext_builddir/thirdparty/php/standard)
 fi

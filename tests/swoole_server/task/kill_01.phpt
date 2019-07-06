@@ -1,5 +1,5 @@
 --TEST--
-swoole_server: kill task worker [SWOOLE_BASE]
+swoole_server/task: kill task worker [SWOOLE_BASE]
 --SKIPIF--
 <?php
 require __DIR__ . '/../../include/skipif.inc';
@@ -20,12 +20,12 @@ $pm->parentFunc = function ($pid) use ($pm) {
         kill_process_by_name(PROC_NAME);
         usleep(10000);
         //判断进程是否存在
-        assert(get_process_pid_by_name(PROC_NAME) > 0);
+        Assert::assert(get_process_pid_by_name(PROC_NAME) > 0);
     }
     $cli = new swoole_client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_SYNC);
     $cli->connect('127.0.0.1', $pm->getFreePort(), 10) or die("ERROR");
     $cli->send("task-01") or die("ERROR");
-    assert($cli->recv() == "task-01");
+    Assert::eq($cli->recv(), "task-01");
     $cli->close();
     $pm->kill();
 };

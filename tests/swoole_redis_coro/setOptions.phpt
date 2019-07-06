@@ -16,21 +16,21 @@ go(function () {
     $ret = $redis->brpoplpush('test', 'test2', 1);
     $s = microtime(true) - $s;
     time_approximate(0.001, $s, 1);
-    assert(!$ret);
+    Assert::assert(!$ret);
 
     // read ok (after internal auto connect)
     $redis->setOptions(['timeout' => 1]);
     $ret = $redis->set('foo', 'bar');
-    assert($ret);
-    assert($redis->errCode === 0);
-    assert($redis->errMsg === '');
+    Assert::assert($ret);
+    Assert::eq($redis->errCode, 0);
+    Assert::eq($redis->errMsg, '');
     $redis->close();
-    assert(!$redis->connected);
+    Assert::assert(!$redis->connected);
 
     // connect timeout
     $redis->setOptions(['connect_timeout' => 0.001]);
     $redis->connect('www.google.com', 80);
-    assert($redis->errCode === SOCKET_ETIMEDOUT);
+    Assert::eq($redis->errCode, SOCKET_ETIMEDOUT);
 });
 swoole_event_wait();
 echo "DONE\n";

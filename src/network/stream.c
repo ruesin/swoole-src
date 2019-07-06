@@ -41,7 +41,7 @@ static void swStream_onConnect(swClient *cli)
 static void swStream_onError(swClient *cli)
 {
     swoole_error_log(SW_LOG_WARNING, SW_ERROR_SERVER_CONNECT_FAIL,
-            " connect() failed (%d: %s) while connecting to worker process.", errno, strerror(errno));
+            " connect() failed (%d: %s) while connecting to worker process", errno, strerror(errno));
     swStream_free(cli->object);
 }
 
@@ -75,6 +75,10 @@ static void swStream_free(swStream *stream)
 swStream* swStream_new(char *dst_host, int dst_port, int type)
 {
     swStream *stream = (swStream*) sw_malloc(sizeof(swStream));
+    if (!stream)
+    {
+        return NULL;
+    }
     bzero(stream, sizeof(swStream));
 
     swClient *cli = &stream->client;
@@ -95,7 +99,7 @@ swStream* swStream_new(char *dst_host, int dst_port, int type)
 
     if (cli->connect(cli, dst_host, dst_port, -1, 0) < 0)
     {
-        swSysError("failed to connect to [%s:%d].", dst_host, dst_port);
+        swSysWarn("failed to connect to [%s:%d]", dst_host, dst_port);
         return NULL;
     }
     else

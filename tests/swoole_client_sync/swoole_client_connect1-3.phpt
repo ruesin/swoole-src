@@ -9,13 +9,13 @@ $pm = new ProcessManager;
 $pm->parentFunc = function () use ($pm) {
     $cli = new swoole_client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_SYNC);
     $r = $cli->connect('127.0.0.1', $pm->getFreePort(), 1);
-    assert($r);
+    Assert::assert($r);
     $r = $w = $e = [$cli];
     $n = swoole_client_select($r, $w, $e, 0);
-    assert($n === 1);
-    assert(count($w) === 1);
-    assert(count($e) === 0);
-    assert(count($r) === 0);
+    Assert::eq($n, 1);
+    Assert::eq(count($w), 1);
+    Assert::eq(count($e), 0);
+    Assert::eq(count($r), 0);
     $cli->close();
     echo "SUCCESS\n";
     $pm->kill();

@@ -1,5 +1,5 @@
 --TEST--
-swoole_runtime: pdo in task and http response detach
+swoole_server/task: pdo in task and http response detach
 --SKIPIF--
 <?php
 require __DIR__ . '/../../include/skipif.inc';
@@ -13,8 +13,8 @@ $pm = new ProcessManager;
 $pm->parentFunc = function (int $pid) use ($pm) {
     for ($i = MAX_CONCURRENCY_LOW; $i--;) {
         go(function () use ($pm) {
-            $ret = httpCoroGet("http://127.0.0.1:{$pm->getFreePort()}");
-            assert($ret === 'Hello Swoole!');
+            $ret = httpGetBody("http://127.0.0.1:{$pm->getFreePort()}");
+            Assert::eq($ret, 'Hello Swoole!');
         });
     }
     swoole_event_wait();
@@ -29,7 +29,7 @@ $pm->childFunc = function () use ($pm) {
         'task_enable_coroutine' => true
     ]);
     $http->on('request', function (swoole_http_request $request, swoole_http_response $response) use ($http) {
-        assert($response->detach());
+        Assert::assert($response->detach());
         if (mt_rand(0, 1)) {
             $http->task($response->fd);
         } else {
@@ -47,11 +47,11 @@ $pm->childFunc = function () use ($pm) {
         } else {
             $response = swoole_http_response::create($fd);
             $pdo = new PDO(
-                "mysql:host=" . MYSQL_SERVER_HOST . ";dbname=" . MYSQL_SERVER_DB . ";charset=utf8",
+                "mysql:host=" . MYSQL_SERVER_HOST . ";port=" . MYSQL_SERVER_PORT . ";dbname=" . MYSQL_SERVER_DB . ";charset=utf8",
                 MYSQL_SERVER_USER, MYSQL_SERVER_PWD
             );
             $stmt = $pdo->query('SELECT "Hello Swoole!"');
-            assert($stmt->execute());
+            Assert::assert($stmt->execute());
             $ret = $stmt->fetchAll(PDO::FETCH_COLUMN)[0];
             $response->end($ret);
         }

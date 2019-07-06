@@ -43,6 +43,7 @@ extern "C"
 
 enum swWebsocketStatus
 {
+    WEBSOCKET_STATUS_NONE = 0,
     WEBSOCKET_STATUS_CONNECTION = 1,
     WEBSOCKET_STATUS_HANDSHAKE = 2,
     WEBSOCKET_STATUS_ACTIVE = 3,
@@ -94,12 +95,13 @@ enum swWebsocketCode
     WEBSOCKET_VERSION = 13,
 };
 
-ssize_t swWebSocket_get_package_length(swProtocol *protocol, swConnection *conn, char *data, uint32_t length);
-void swWebSocket_encode(swString *buffer, char *data, size_t length, char opcode, uint8_t finish, uint8_t mask);
+void swWebSocket_encode(swString *buffer, const char *data, size_t length, char opcode, uint8_t finish, uint8_t mask);
 void swWebSocket_decode(swWebSocket_frame *frame, swString *data);
 int swWebSocket_pack_close_frame(swString *buffer, int code, char* reason, size_t length, uint8_t mask);
 void swWebSocket_print_frame(swWebSocket_frame *frame);
-int swWebSocket_dispatch_frame(swConnection *conn, char *data, uint32_t length);
+
+ssize_t swWebSocket_get_package_length(swProtocol *protocol, swConnection *conn, char *data, uint32_t length);
+int swWebSocket_dispatch_frame(swProtocol *protocol, swConnection *conn, char *data, uint32_t length);
 
 #ifdef __cplusplus
 }

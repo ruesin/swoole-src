@@ -5,7 +5,6 @@ swoole_websocket_server: websocket server full test
 --FILE--
 <?php
 require __DIR__ . '/../include/bootstrap.php';
-require __DIR__ . '/../include/lib/class.websocket_client.php';
 $data_list = [];
 for ($i = MAX_REQUESTS; $i--;) {
     $rand = openssl_random_pseudo_bytes(mt_rand(1, 128000));
@@ -33,9 +32,9 @@ $pm->parentFunc = function (int $pid) use ($pm, $data_list) {
             while (true) {
                 $frame = $cli->recv();
                 list($id, $opcode) = explode('|', $frame->data, 3);
-                assert($frame->finish);
-                assert($frame->opcode === (int)$opcode);
-                assert($frame->data === $cli_data_list[$id]);
+                Assert::assert($frame->finish);
+                Assert::eq($frame->opcode, (int)$opcode);
+                Assert::eq($frame->data, $cli_data_list[$id]);
                 unset($cli_data_list[$id]);
                 if (empty($cli_data_list)) {
                     break;
@@ -71,7 +70,7 @@ $pm->childFunc = function () use ($pm) {
             } else {
                 $ret = $serv->push($req->fd, $data, $opcode);
             }
-            if (!assert($ret)) {
+            if (!Assert::assert($ret)) {
                 var_dump($serv->getLastError());
             }
         }

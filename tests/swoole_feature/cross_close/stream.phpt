@@ -1,7 +1,7 @@
 --TEST--
-swoole_feature: cross_close: stream
+swoole_feature/cross_close: stream
 --SKIPIF--
-<?php require __DIR__ . '/../../include/config.php'; ?>
+<?php require __DIR__ . '/../../include/skipif.inc'; ?>
 --FILE--
 <?php
 require __DIR__ . '/../../include/bootstrap.php';
@@ -18,7 +18,7 @@ go(function () {
             echo "DONE\n";
         });
         echo "READ\n";
-        assert(!fread($fp, 1024));
+        Assert::assert(!fread($fp, 1024));
         echo "CLOSED\n";
         fclose($fp);
     }

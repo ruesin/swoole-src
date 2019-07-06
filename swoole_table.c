@@ -18,12 +18,10 @@
 
 #include "include/table.h"
 
-static zend_class_entry swoole_table_ce;
-static zend_class_entry *swoole_table_ce_ptr;
+static zend_class_entry *swoole_table_ce;
 static zend_object_handlers swoole_table_handlers;
 
-static zend_class_entry swoole_table_row_ce;
-static zend_class_entry *swoole_table_row_ce_ptr;
+static zend_class_entry *swoole_table_row_ce;
 static zend_object_handlers swoole_table_row_handlers;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_table_void, 0, 0, 0)
@@ -164,6 +162,7 @@ static inline void php_swoole_table_row2array(swTable *table, swTableRow *row, z
     int64_t lval = 0;
     char *k;
 
+    swHashMap_rewind(table->columns);
     while(1)
     {
         col = swHashMap_each(table->columns, &k);
@@ -215,7 +214,7 @@ static inline void php_swoole_table_get_field_value(swTable *table, swTableRow *
     swTableColumn *col = swHashMap_find(table->columns, field, field_len);
     if (!col)
     {
-        ZVAL_BOOL(return_value, 0);
+        ZVAL_FALSE(return_value);
         return;
     }
     if (col->type == SW_TABLE_STRING)
@@ -254,27 +253,29 @@ static inline void php_swoole_table_get_field_value(swTable *table, swTableRow *
 
 void swoole_table_init(int module_number)
 {
-    SWOOLE_INIT_CLASS_ENTRY(swoole_table, "Swoole\\Table", "swoole_table", NULL, swoole_table_methods);
-    SWOOLE_SET_CLASS_SERIALIZABLE(swoole_table, zend_class_serialize_deny, zend_class_unserialize_deny);
-    SWOOLE_SET_CLASS_CLONEABLE(swoole_table, zend_class_clone_deny);
-    SWOOLE_SET_CLASS_UNSET_PROPERTY_HANDLER(swoole_table, zend_class_unset_property_deny);
-    zend_class_implements(swoole_table_ce_ptr, 2, zend_ce_iterator, zend_ce_arrayaccess);
+    SW_INIT_CLASS_ENTRY(swoole_table, "Swoole\\Table", "swoole_table", NULL, swoole_table_methods);
+    SW_SET_CLASS_SERIALIZABLE(swoole_table, zend_class_serialize_deny, zend_class_unserialize_deny);
+    SW_SET_CLASS_CLONEABLE(swoole_table, sw_zend_class_clone_deny);
+    SW_SET_CLASS_UNSET_PROPERTY_HANDLER(swoole_table, sw_zend_class_unset_property_deny);
+    // SW_SET_CLASS_CREATE_WITH_ITS_OWN_HANDLERS(swoole_table);
+    zend_class_implements(swoole_table_ce, 2, zend_ce_iterator, zend_ce_arrayaccess);
 #ifdef SW_HAVE_COUNTABLE
-    zend_class_implements(swoole_table_ce_ptr, 1, zend_ce_countable);
+    zend_class_implements(swoole_table_ce, 1, zend_ce_countable);
 #endif
 
-    zend_declare_class_constant_long(swoole_table_ce_ptr, ZEND_STRL("TYPE_INT"), SW_TABLE_INT);
-    zend_declare_class_constant_long(swoole_table_ce_ptr, ZEND_STRL("TYPE_STRING"), SW_TABLE_STRING);
-    zend_declare_class_constant_long(swoole_table_ce_ptr, ZEND_STRL("TYPE_FLOAT"), SW_TABLE_FLOAT);
+    zend_declare_class_constant_long(swoole_table_ce, ZEND_STRL("TYPE_INT"), SW_TABLE_INT);
+    zend_declare_class_constant_long(swoole_table_ce, ZEND_STRL("TYPE_STRING"), SW_TABLE_STRING);
+    zend_declare_class_constant_long(swoole_table_ce, ZEND_STRL("TYPE_FLOAT"), SW_TABLE_FLOAT);
 
-    SWOOLE_INIT_CLASS_ENTRY(swoole_table_row, "Swoole\\Table\\Row", "swoole_table_row", NULL, swoole_table_row_methods);
-    SWOOLE_SET_CLASS_SERIALIZABLE(swoole_table_row, zend_class_serialize_deny, zend_class_unserialize_deny);
-    SWOOLE_SET_CLASS_CLONEABLE(swoole_table_row, zend_class_clone_deny);
-    SWOOLE_SET_CLASS_UNSET_PROPERTY_HANDLER(swoole_table_row, zend_class_unset_property_deny);
-    zend_class_implements(swoole_table_row_ce_ptr, 1, zend_ce_arrayaccess);
+    SW_INIT_CLASS_ENTRY(swoole_table_row, "Swoole\\Table\\Row", "swoole_table_row", NULL, swoole_table_row_methods);
+    SW_SET_CLASS_SERIALIZABLE(swoole_table_row, zend_class_serialize_deny, zend_class_unserialize_deny);
+    SW_SET_CLASS_CLONEABLE(swoole_table_row, sw_zend_class_clone_deny);
+    SW_SET_CLASS_UNSET_PROPERTY_HANDLER(swoole_table_row, sw_zend_class_unset_property_deny);
+    // SW_SET_CLASS_CREATE_WITH_ITS_OWN_HANDLERS(swoole_table_row);
+    zend_class_implements(swoole_table_row_ce, 1, zend_ce_arrayaccess);
 
-    zend_declare_property_null(swoole_table_row_ce_ptr, ZEND_STRL("key"), ZEND_ACC_PUBLIC);
-    zend_declare_property_null(swoole_table_row_ce_ptr, ZEND_STRL("value"), ZEND_ACC_PUBLIC);
+    zend_declare_property_null(swoole_table_row_ce, ZEND_STRL("key"), ZEND_ACC_PUBLIC);
+    zend_declare_property_null(swoole_table_row_ce, ZEND_STRL("value"), ZEND_ACC_PUBLIC);
 }
 
 void swoole_table_column_free(swTableColumn *col)
@@ -287,18 +288,19 @@ PHP_METHOD(swoole_table, __construct)
     zend_long table_size;
     double conflict_proportion = SW_TABLE_CONFLICT_PROPORTION;
 
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "l|d", &table_size, &conflict_proportion) == FAILURE)
-    {
-        RETURN_FALSE;
-    }
+    ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 2)
+        Z_PARAM_LONG(table_size)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_DOUBLE(conflict_proportion)
+    ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
     swTable *table = swTable_new(table_size, conflict_proportion);
     if (table == NULL)
     {
-        zend_throw_exception(swoole_exception_ce_ptr, "global memory allocation failure.", SW_ERROR_MALLOC_FAIL);
+        zend_throw_exception(swoole_exception_ce, "global memory allocation failure", SW_ERROR_MALLOC_FAIL);
         RETURN_FALSE;
     }
-    swoole_set_object(getThis(), table);
+    swoole_set_object(ZEND_THIS, table);
 }
 
 PHP_METHOD(swoole_table, column)
@@ -312,20 +314,24 @@ PHP_METHOD(swoole_table, column)
     {
         RETURN_FALSE;
     }
-    if (type == SW_TABLE_STRING && size < 1)
+    if (type == SW_TABLE_STRING)
     {
-        swoole_php_fatal_error(E_WARNING, "the length of string type values has to be more than zero.");
-        RETURN_FALSE;
+        if (size < 1)
+        {
+            php_swoole_fatal_error(E_WARNING, "the length of string type values has to be more than zero");
+            RETURN_FALSE;
+        }
+        size = SW_MEM_ALIGNED_SIZE(size);
     }
     //default int32
-    if (type == SW_TABLE_INT && size < 1)
+    if (type == SW_TABLE_INT && size < 4)
     {
         size = 4;
     }
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (table->memory)
     {
-        swoole_php_fatal_error(E_WARNING, "can't add column after the creation of swoole table.");
+        php_swoole_fatal_error(E_WARNING, "can't add column after the creation of swoole table");
         RETURN_FALSE;
     }
     swTableColumn_add(table, name, len, type, size);
@@ -334,28 +340,28 @@ PHP_METHOD(swoole_table, column)
 
 static PHP_METHOD(swoole_table, create)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (table->memory)
     {
-        swoole_php_fatal_error(E_WARNING, "the swoole table has been created already.");
+        php_swoole_fatal_error(E_WARNING, "the swoole table has been created already");
         RETURN_FALSE;
     }
     if (swTable_create(table) < 0)
     {
-        swoole_php_fatal_error(E_ERROR, "unable to allocate memory.");
+        php_swoole_fatal_error(E_ERROR, "unable to allocate memory");
         RETURN_FALSE;
     }
-    zend_update_property_long(swoole_buffer_ce_ptr, getThis(), ZEND_STRL("size"), table->size);
-    zend_update_property_long(swoole_buffer_ce_ptr, getThis(), ZEND_STRL("memorySize"), table->memory_size);
+    zend_update_property_long(swoole_buffer_ce, ZEND_THIS, ZEND_STRL("size"), table->size);
+    zend_update_property_long(swoole_buffer_ce, ZEND_THIS, ZEND_STRL("memorySize"), table->memory_size);
     RETURN_TRUE;
 }
 
 static PHP_METHOD(swoole_table, destroy)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -374,10 +380,10 @@ static PHP_METHOD(swoole_table, set)
         RETURN_FALSE;
     }
 
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -386,18 +392,18 @@ static PHP_METHOD(swoole_table, set)
     if (!row)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_error(E_WARNING, "unable to allocate memory.");
+        php_swoole_error(E_WARNING, "failed to set('%*s'), unable to allocate memory", (int )keylen, key);
         RETURN_FALSE;
     }
 
-    swTableColumn *col;
-    zval *v;
+    HashTable *ht = Z_ARRVAL_P(array);
     char *k;
     uint32_t klen;
     int ktype;
-    HashTable *_ht = Z_ARRVAL_P(array);
+    zval *zv;
+    swTableColumn *col;
 
-    SW_HASHTABLE_FOREACH_START2(_ht, k, klen, ktype, v)
+    SW_HASHTABLE_FOREACH_START2(ht, k, klen, ktype, zv)
     {
         col = swTableColumn_get(table, k, klen);
         if (k == NULL || col == NULL)
@@ -406,18 +412,18 @@ static PHP_METHOD(swoole_table, set)
         }
         else if (col->type == SW_TABLE_STRING)
         {
-            zend_string *str = zval_get_string(v);
+            zend_string *str = zval_get_string(zv);
             swTableRow_set_value(row, col, ZSTR_VAL(str), ZSTR_LEN(str));
             zend_string_release(str);
         }
         else if (col->type == SW_TABLE_FLOAT)
         {
-            double _value = zval_get_double(v);
+            double _value = zval_get_double(zv);
             swTableRow_set_value(row, col, &_value, 0);
         }
         else
         {
-            long _value = zval_get_long(v);
+            long _value = zval_get_long(zv);
             swTableRow_set_value(row, col, &_value, 0);
         }
     }
@@ -446,10 +452,10 @@ static PHP_METHOD(swoole_table, incr)
     }
 
     swTableRow *_rowlock = NULL;
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -457,7 +463,7 @@ static PHP_METHOD(swoole_table, incr)
     if (!row)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "unable to allocate memory.");
+        php_swoole_fatal_error(E_WARNING, "unable to allocate memory");
         RETURN_FALSE;
     }
 
@@ -466,13 +472,13 @@ static PHP_METHOD(swoole_table, incr)
     if (column == NULL)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "column[%s] does not exist.", col);
+        php_swoole_fatal_error(E_WARNING, "column[%s] does not exist", col);
         RETURN_FALSE;
     }
     else if (column->type == SW_TABLE_STRING)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "can't execute 'incr' on a string type column.");
+        php_swoole_fatal_error(E_WARNING, "can't execute 'incr' on a string type column");
         RETURN_FALSE;
     }
     else if (column->type == SW_TABLE_FLOAT)
@@ -522,10 +528,10 @@ static PHP_METHOD(swoole_table, decr)
     }
 
     swTableRow *_rowlock = NULL;
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -533,7 +539,7 @@ static PHP_METHOD(swoole_table, decr)
     if (!row)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "unable to allocate memory.");
+        php_swoole_fatal_error(E_WARNING, "unable to allocate memory");
         RETURN_FALSE;
     }
 
@@ -542,13 +548,13 @@ static PHP_METHOD(swoole_table, decr)
     if (column == NULL)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "column[%s] does not exist.", col);
+        php_swoole_fatal_error(E_WARNING, "column[%s] does not exist", col);
         RETURN_FALSE;
     }
     else if (column->type == SW_TABLE_STRING)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "can't execute 'decr' on a string type column.");
+        php_swoole_fatal_error(E_WARNING, "can't execute 'decr' on a string type column");
         RETURN_FALSE;
     }
     else if (column->type == SW_TABLE_FLOAT)
@@ -597,10 +603,10 @@ static PHP_METHOD(swoole_table, get)
     }
 
     swTableRow *_rowlock = NULL;
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -633,10 +639,10 @@ static PHP_METHOD(swoole_table, offsetGet)
     }
 
     swTableRow *_rowlock = NULL;
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "Must create table first.");
+        php_swoole_fatal_error(E_ERROR, "Must create table first");
         RETURN_FALSE;
     }
 
@@ -653,9 +659,9 @@ static PHP_METHOD(swoole_table, offsetGet)
     }
     swTableRow_unlock(_rowlock);
 
-    object_init_ex(return_value, swoole_table_row_ce_ptr);
-    zend_update_property(swoole_table_row_ce_ptr, return_value, ZEND_STRL("value"), &value);
-    zend_update_property_stringl(swoole_table_row_ce_ptr, return_value, ZEND_STRL("key"), key, keylen);
+    object_init_ex(return_value, swoole_table_row_ce);
+    zend_update_property(swoole_table_row_ce, return_value, ZEND_STRL("value"), &value);
+    zend_update_property_stringl(swoole_table_row_ce, return_value, ZEND_STRL("key"), key, keylen);
     zval_ptr_dtor(&value);
     swoole_set_object(return_value, table);
 }
@@ -670,10 +676,10 @@ static PHP_METHOD(swoole_table, exists)
         RETURN_FALSE;
     }
 
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -705,10 +711,10 @@ static PHP_METHOD(swoole_table, del)
         RETURN_FALSE;
     }
 
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     SW_CHECK_RETURN(swTableRow_del(table, key, keylen));
@@ -731,10 +737,10 @@ static PHP_METHOD(swoole_table, count)
         RETURN_FALSE;
     }
 
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
 
@@ -750,7 +756,7 @@ static PHP_METHOD(swoole_table, count)
 
 static PHP_METHOD(swoole_table, getMemorySize)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
         RETURN_LONG(swTable_get_memory_size(table));
@@ -763,10 +769,10 @@ static PHP_METHOD(swoole_table, getMemorySize)
 
 static PHP_METHOD(swoole_table, rewind)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     swTable_iterator_rewind(table);
@@ -775,38 +781,52 @@ static PHP_METHOD(swoole_table, rewind)
 
 static PHP_METHOD(swoole_table, current)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     swTableRow *row = swTable_iterator_current(table);
-    swTableRow_lock(row);
-    php_swoole_table_row2array(table, row, return_value);
-    swTableRow_unlock(row);
+    if (row)
+    {
+        swTableRow_lock(row);
+        php_swoole_table_row2array(table, row, return_value);
+        swTableRow_unlock(row);
+    }
+    else
+    {
+        RETURN_NULL();
+    }
 }
 
 static PHP_METHOD(swoole_table, key)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     swTableRow *row = swTable_iterator_current(table);
-    swTableRow_lock(row);
-    RETVAL_STRING(row->key);
-    swTableRow_unlock(row);
+    if (row)
+    {
+        swTableRow_lock(row);
+        RETVAL_STRING(row->key);
+        swTableRow_unlock(row);
+    }
+    else
+    {
+        RETURN_NULL();
+    }
 }
 
 static PHP_METHOD(swoole_table, next)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     swTable_iterator_forward(table);
@@ -814,10 +834,10 @@ static PHP_METHOD(swoole_table, next)
 
 static PHP_METHOD(swoole_table, valid)
 {
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (!table->memory)
     {
-        swoole_php_fatal_error(E_ERROR, "the swoole table does not exist.");
+        php_swoole_fatal_error(E_ERROR, "the swoole table does not exist");
         RETURN_FALSE;
     }
     swTableRow *row = swTable_iterator_current(table);
@@ -834,7 +854,7 @@ static PHP_METHOD(swoole_table_row, offsetExists)
         RETURN_FALSE;
     }
 
-    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce_ptr, getThis(), ZEND_STRL("value"), 0);
+    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce, ZEND_THIS, ZEND_STRL("value"), 0);
     RETURN_BOOL(zend_hash_str_exists(Z_ARRVAL_P(zprop_value), key, keylen));
 }
 
@@ -848,7 +868,7 @@ static PHP_METHOD(swoole_table_row, offsetGet)
         RETURN_FALSE;
     }
 
-    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce_ptr, getThis(), ZEND_STRL("value"), 0);
+    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce, ZEND_THIS, ZEND_STRL("value"), 0);
     zval *retval = NULL;
     if (!(retval = zend_hash_str_find(Z_ARRVAL_P(zprop_value), key, keylen)))
     {
@@ -868,21 +888,21 @@ static PHP_METHOD(swoole_table_row, offsetSet)
         RETURN_FALSE;
     }
 
-    swTable *table = swoole_get_object(getThis());
+    swTable *table = swoole_get_object(ZEND_THIS);
     if (table == NULL || table->memory == NULL)
     {
-        swoole_php_fatal_error(E_ERROR, "Must create table first.");
+        php_swoole_fatal_error(E_ERROR, "Must create table first");
         RETURN_FALSE;
     }
 
-    zval *zprop_key = sw_zend_read_property(swoole_table_row_ce_ptr, getThis(), ZEND_STRL("key"), 0);
+    zval *zprop_key = sw_zend_read_property(swoole_table_row_ce, ZEND_THIS, ZEND_STRL("key"), 0);
 
     swTableRow *_rowlock = NULL;
     swTableRow *row = swTableRow_set(table, Z_STRVAL_P(zprop_key), Z_STRLEN_P(zprop_key), &_rowlock);
     if (!row)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_error(E_WARNING, "Unable to allocate memory.");
+        php_swoole_error(E_WARNING, "Unable to allocate memory");
         RETURN_FALSE;
     }
 
@@ -891,7 +911,7 @@ static PHP_METHOD(swoole_table_row, offsetSet)
     if (col == NULL)
     {
         swTableRow_unlock(_rowlock);
-        swoole_php_fatal_error(E_WARNING, "column[%s] does not exist.", key);
+        php_swoole_fatal_error(E_WARNING, "column[%s] does not exist", key);
         RETURN_FALSE;
     }
     if (col->type == SW_TABLE_STRING)
@@ -912,7 +932,7 @@ static PHP_METHOD(swoole_table_row, offsetSet)
     }
     swTableRow_unlock(_rowlock);
 
-    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce_ptr, getThis(), ZEND_STRL("value"), 0);
+    zval *zprop_value = sw_zend_read_property(swoole_table_row_ce, ZEND_THIS, ZEND_STRL("value"), 0);
     Z_TRY_ADDREF_P(value);
     add_assoc_zval_ex(zprop_value, key, keylen, value);
 
@@ -921,13 +941,13 @@ static PHP_METHOD(swoole_table_row, offsetSet)
 
 static PHP_METHOD(swoole_table_row, offsetUnset)
 {
-    swoole_php_fatal_error(E_WARNING, "not supported.");
+    php_swoole_fatal_error(E_WARNING, "not supported");
     RETURN_FALSE;
 }
 
 static PHP_METHOD(swoole_table_row, __destruct)
 {
-    SW_PREVENT_USER_DESTRUCT;
+    SW_PREVENT_USER_DESTRUCT();
 
-    swoole_set_object(getThis(), NULL);
+    swoole_set_object(ZEND_THIS, NULL);
 }

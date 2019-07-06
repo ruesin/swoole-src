@@ -26,7 +26,6 @@ static int swPort_onRead_check_length(swReactor *reactor, swListenPort *lp, swEv
 static int swPort_onRead_check_eof(swReactor *reactor, swListenPort *lp, swEvent *event);
 static int swPort_onRead_http(swReactor *reactor, swListenPort *lp, swEvent *event);
 static int swPort_onRead_redis(swReactor *reactor, swListenPort *lp, swEvent *event);
-static int swPort_http_static_handler(swServer *serv, swHttpRequest *request, swConnection *conn);
 
 void swPort_init(swListenPort *port)
 {
@@ -58,20 +57,20 @@ int swPort_enable_ssl_encrypt(swListenPort *ls)
 {
     if (ls->ssl_option.cert_file == NULL || ls->ssl_option.key_file == NULL)
     {
-        swWarn("SSL error, require ssl_cert_file and ssl_key_file.");
+        swWarn("SSL error, require ssl_cert_file and ssl_key_file");
         return SW_ERR;
     }
     ls->ssl_context = swSSL_get_context(&ls->ssl_option);
     if (ls->ssl_context == NULL)
     {
-        swWarn("swSSL_get_context() error.");
+        swWarn("swSSL_get_context() error");
         return SW_ERR;
     }
     if (ls->ssl_option.client_cert_file
             && swSSL_set_client_certificate(ls->ssl_context, ls->ssl_option.client_cert_file,
                     ls->ssl_option.verify_depth) == SW_ERR)
     {
-        swWarn("swSSL_set_client_certificate() error.");
+        swWarn("swSSL_set_client_certificate() error");
         return SW_ERR;
     }
     if (ls->open_http_protocol)
@@ -85,7 +84,7 @@ int swPort_enable_ssl_encrypt(swListenPort *ls)
     }
     if (swSSL_server_set_cipher(ls->ssl_context, &ls->ssl_config) < 0)
     {
-        swWarn("swSSL_server_set_cipher() error.");
+        swWarn("swSSL_server_set_cipher() error");
         return SW_ERR;
     }
     return SW_OK;
@@ -100,7 +99,7 @@ int swPort_listen(swListenPort *ls)
     //listen stream socket
     if (listen(sock, ls->backlog) < 0)
     {
-        swWarn("listen(%s:%d, %d) failed. Error: %s[%d]", ls->host, ls->port, ls->backlog, strerror(errno), errno);
+        swSysWarn("listen(%s:%d, %d) failed", ls->host, ls->port, ls->backlog);
         return SW_ERR;
     }
 
@@ -109,7 +108,7 @@ int swPort_listen(swListenPort *ls)
     {
         if (setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT, (const void*) &ls->tcp_defer_accept, sizeof(int)) != 0)
         {
-            swSysError("setsockopt(TCP_DEFER_ACCEPT) failed.");
+            swSysWarn("setsockopt(TCP_DEFER_ACCEPT) failed");
         }
     }
 #endif
@@ -119,7 +118,7 @@ int swPort_listen(swListenPort *ls)
     {
         if (setsockopt(sock, IPPROTO_TCP, TCP_FASTOPEN, (const void*) &ls->tcp_fastopen, sizeof(int)) != 0)
         {
-            swSysError("setsockopt(TCP_FASTOPEN) failed.");
+            swSysWarn("setsockopt(TCP_FASTOPEN) failed");
         }
     }
 #endif
@@ -129,7 +128,7 @@ int swPort_listen(swListenPort *ls)
     {
         if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *) &option, sizeof(option)) != 0)
         {
-            swSysError("setsockopt(SO_KEEPALIVE) failed.");
+            swSysWarn("setsockopt(SO_KEEPALIVE) failed");
         }
 #ifdef TCP_KEEPIDLE
         setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, (void*) &ls->tcp_keepidle, sizeof(int));
@@ -145,9 +144,9 @@ int swPort_listen(swListenPort *ls)
     return SW_OK;
 }
 
-
-void swPort_set_protocol(swListenPort *ls)
+void swPort_set_protocol(swServer *serv, swListenPort *ls)
 {
+    ls->protocol.private_data_2 = serv;
     //Thread mode must copy the data.
     //will free after onFinish
     if (ls->open_eof_check)
@@ -235,7 +234,7 @@ static int swPort_onRead_raw(swReactor *reactor, swListenPort *port, swEvent *ev
         switch (swConnection_error(errno))
         {
         case SW_ERROR:
-            swSysError("recv from connection#%d failed.", event->fd);
+            swSysWarn("recv from connection#%d failed", event->fd);
             return SW_OK;
         case SW_CLOSE:
             conn->close_errno = errno;
@@ -247,22 +246,21 @@ static int swPort_onRead_raw(swReactor *reactor, swListenPort *port, swEvent *ev
     else if (n == 0)
     {
         _close_fd:
-        swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+        swReactor_trigger_close_event(reactor, event);
         return SW_OK;
     }
     else
     {
-        return swReactorThread_dispatch(conn, buffer, n);
+        return swReactorThread_dispatch(&port->protocol, conn, buffer, n);
     }
 }
 
 static int swPort_onRead_check_length(swReactor *reactor, swListenPort *port, swEvent *event)
 {
-    swServer *serv = reactor->ptr;
     swConnection *conn = event->socket;
     swProtocol *protocol = &port->protocol;
 
-    swString *buffer = swServer_get_buffer(serv, event->fd);
+    swString *buffer = swConnection_get_buffer(conn);
     if (!buffer)
     {
         return SW_ERR;
@@ -270,8 +268,8 @@ static int swPort_onRead_check_length(swReactor *reactor, swListenPort *port, sw
 
     if (swProtocol_recv_check_length(protocol, conn, buffer) < 0)
     {
-        swTrace("Close Event.FD=%d|From=%d", event->fd, event->from_id);
-        swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+        swTrace("Close Event.FD=%d|From=%d", event->fd, event->reactor_id);
+        swReactor_trigger_close_event(reactor, event);
     }
 
     return SW_OK;
@@ -299,7 +297,8 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
 #ifdef SW_USE_HTTP2
     if (conn->http2_stream)
     {
-        _parse_frame: return swPort_onRead_check_length(reactor, port, event);
+        _parse_frame:
+        return swPort_onRead_check_length(reactor, port, event);
     }
 #endif
 
@@ -314,6 +313,11 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
     if (conn->object == NULL)
     {
         request = sw_malloc(sizeof(swHttpRequest));
+        if (!request)
+        {
+            swWarn("malloc(%ld) failed", sizeof(swHttpRequest));
+            return SW_ERR;
+        }
         bzero(request, sizeof(swHttpRequest));
         conn->object = request;
     }
@@ -328,14 +332,14 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
         //alloc memory failed.
         if (!request->buffer)
         {
-            swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+            swReactor_trigger_close_event(reactor, event);
             return SW_ERR;
         }
     }
 
     swString *buffer = request->buffer;
 
-    recv_data:
+    _recv_data:
     buf = buffer->str + buffer->length;
     buf_len = buffer->size - buffer->length;
 
@@ -345,20 +349,20 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
         switch (swConnection_error(errno))
         {
         case SW_ERROR:
-            swSysError("recv from connection#%d failed.", event->fd);
+            swSysWarn("recv from connection#%d failed", event->fd);
             return SW_OK;
         case SW_CLOSE:
             conn->close_errno = errno;
-            goto close_fd;
+            goto _close_fd;
         default:
             return SW_OK;
         }
     }
     else if (n == 0)
     {
-        close_fd:
+        _close_fd:
         swHttpRequest_free(conn);
-        swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+        swReactor_trigger_close_event(reactor, event);
         return SW_OK;
     }
     else
@@ -372,25 +376,25 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
             {
                 return SW_OK;
             }
-            swoole_error_log(SW_LOG_TRACE, SW_ERROR_HTTP_INVALID_PROTOCOL, "get protocol failed.");
-#ifdef SW_HTTP_BAD_REQUEST_TIP
-            _bad_request: if (swConnection_send(conn, SW_STRL(SW_HTTP_BAD_REQUEST_TIP), 0) < 0)
-            {
-                swSysError("send() failed.");
-            }
+            swoole_error_log(SW_LOG_TRACE, SW_ERROR_HTTP_INVALID_PROTOCOL, "get protocol failed");
+#ifdef SW_USE_HTTP2
+            _bad_request:
 #endif
-            goto close_fd;
+#ifdef SW_HTTP_BAD_REQUEST_PACKET
+            swConnection_send(conn, SW_STRL(SW_HTTP_BAD_REQUEST_PACKET), 0);
+#endif
+            goto _close_fd;
         }
 
         if (request->method > SW_HTTP_PRI)
         {
             swWarn("method no support");
-            goto close_fd;
+            goto _close_fd;
         }
 #ifdef SW_USE_HTTP2
         else if (request->method == SW_HTTP_PRI)
         {
-            if (unlikely(!port->open_http2_protocol))
+            if (sw_unlikely(!port->open_http2_protocol))
             {
                 goto _bad_request;
             }
@@ -402,10 +406,10 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
                 swHttpRequest_free(conn);
                 return SW_OK;
             }
-            swString *buffer = swServer_get_buffer(serv, event->fd);
+            swString *buffer = swConnection_get_buffer(conn);
             if (!buffer)
             {
-                goto close_fd;
+                goto _close_fd;
             }
             swString_append_ptr(buffer, buf + (sizeof(SW_HTTP2_PRI_STRING) - 1), n - (sizeof(SW_HTTP2_PRI_STRING) - 1));
             swHttpRequest_free(conn);
@@ -420,12 +424,12 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
             {
                 if (buffer->size == buffer->length)
                 {
-                    swWarn("[2]http header is too long.");
-                    goto close_fd;
+                    swWarn("[2]http header is too long");
+                    goto _close_fd;
                 }
                 else
                 {
-                    goto recv_data;
+                    goto _recv_data;
                 }
             }
         }
@@ -443,18 +447,18 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
                     /**
                      * send static file content directly in the reactor thread
                      */
-                    if (!(serv->enable_static_handler && swPort_http_static_handler(serv, request, conn)))
+                    if (!(serv->enable_static_handler && swHttp_static_handler(serv, request, conn)))
                     {
                         /**
                          * dynamic request, dispatch to worker
                          */
-                        swReactorThread_dispatch(conn, buffer->str, request->header_length);
+                        swReactorThread_dispatch(protocol, conn, buffer->str, request->header_length);
                         /**
                          * http pipeline, multi request
                          */
                         if (conn->active && buffer->length > request->header_length)
                         {
-                            swString_sub(buffer, request->header_length, 0);
+                            swString_pop_front(buffer, request->header_length);
                             swHttpRequest_clean(request);
                             goto _parse;
                         }
@@ -464,19 +468,20 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
                 }
                 else if (buffer->size == buffer->length)
                 {
-                    swWarn("[0]http header is too long.");
-                    goto close_fd;
+                    swWarn("[0]http header is too long");
+                    goto _close_fd;
                 }
                 /* wait more data */
                 else
                 {
-                    goto recv_data;
+                    goto _recv_data;
                 }
             }
             else if (request->content_length > (protocol->package_max_length - request->header_length))
             {
-                swWarn("Content-Length is too big, MaxSize=[%d].", protocol->package_max_length - request->header_length);
-                goto close_fd;
+                //TODO send http 413
+                swWarn("Content-Length is too big, MaxSize=[%d]", protocol->package_max_length - request->header_length);
+                goto _close_fd;
             }
         }
 
@@ -484,7 +489,7 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
         uint32_t request_size = request->header_length + request->content_length;
         if (request_size > buffer->size && swString_extend(buffer, request_size) < 0)
         {
-            goto close_fd;
+            goto _close_fd;
         }
 
         //discard the redundant data
@@ -495,7 +500,7 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
 
         if (buffer->length == request_size)
         {
-            swReactorThread_dispatch(conn, buffer->str, buffer->length);
+            swReactorThread_dispatch(protocol, conn, buffer->str, buffer->length);
             swHttpRequest_free(conn);
         }
         else
@@ -506,19 +511,19 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
             {
                 swSendData _send;
                 _send.data = "HTTP/1.1 100 Continue\r\n\r\n";
-                _send.length = strlen(_send.data);
+                _send.info.len = strlen(_send.data);
 
                 int send_times = 0;
-                direct_send:
-                n = swConnection_send(conn, _send.data, _send.length, 0);
-                if (n < _send.length)
+                _direct_send:
+                n = swConnection_send(conn, _send.data, _send.info.len, 0);
+                if (n < _send.info.len)
                 {
                     _send.data += n;
-                    _send.length -= n;
+                    _send.info.len -= n;
                     send_times++;
                     if (send_times < 10)
                     {
-                        goto direct_send;
+                        goto _direct_send;
                     }
                     else
                     {
@@ -534,7 +539,7 @@ static int swPort_onRead_http(swReactor *reactor, swListenPort *port, swEvent *e
                 );
             }
 #endif
-            goto recv_data;
+            goto _recv_data;
         }
     }
     return SW_OK;
@@ -544,9 +549,8 @@ static int swPort_onRead_redis(swReactor *reactor, swListenPort *port, swEvent *
 {
     swConnection *conn = event->socket;
     swProtocol *protocol = &port->protocol;
-    swServer *serv = reactor->ptr;
 
-    swString *buffer = swServer_get_buffer(serv, event->fd);
+    swString *buffer = swConnection_get_buffer(conn);
     if (!buffer)
     {
         return SW_ERR;
@@ -554,7 +558,7 @@ static int swPort_onRead_redis(swReactor *reactor, swListenPort *port, swEvent *
 
     if (swRedis_recv(protocol, conn, buffer) < 0)
     {
-        swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+        swReactor_trigger_close_event(reactor, event);
     }
 
     return SW_OK;
@@ -564,9 +568,8 @@ static int swPort_onRead_check_eof(swReactor *reactor, swListenPort *port, swEve
 {
     swConnection *conn = event->socket;
     swProtocol *protocol = &port->protocol;
-    swServer *serv = reactor->ptr;
 
-    swString *buffer = swServer_get_buffer(serv, event->fd);
+    swString *buffer = swConnection_get_buffer(conn);
     if (!buffer)
     {
         return SW_ERR;
@@ -574,7 +577,7 @@ static int swPort_onRead_check_eof(swReactor *reactor, swListenPort *port, swEve
 
     if (swProtocol_recv_check_eof(protocol, conn, buffer) < 0)
     {
-        swReactor_getHandle(reactor, 0, SW_FD_CLOSE)(reactor, event);
+        swReactor_trigger_close_event(reactor, event);
     }
 
     return SW_OK;
@@ -607,214 +610,3 @@ void swPort_free(swListenPort *port)
     }
 }
 
-static int swPort_http_static_handler(swServer *serv, swHttpRequest *request, swConnection *conn)
-{
-    char *url = request->buffer->str + request->url_offset;
-    char *params = memchr(url, '?', request->url_length);
-
-    struct
-    {
-        off_t offset;
-        size_t length;
-        char filename[PATH_MAX];
-    } buffer;
-
-    char *p = buffer.filename;
-
-    memcpy(p, serv->document_root, serv->document_root_len);
-    p += serv->document_root_len;
-    size_t n = params ? params - url : request->url_length;
-
-    if (serv->document_root_len + n >= PATH_MAX)
-    {
-        return SW_FALSE;
-    }
-
-    memcpy(p, url, n);
-    p += n;
-    *p = '\0';
-
-    char real_path[PATH_MAX];
-    if (!realpath(buffer.filename, real_path))
-    {
-        return SW_FALSE;
-    }
-
-    if (real_path[serv->document_root_len] != '/')
-    {
-        return SW_FALSE;
-    }
-
-    if (strncmp(real_path, serv->document_root, serv->document_root_len) != 0)
-    {
-        return SW_FALSE;
-    }
-
-    struct stat file_stat;
-    if (lstat(buffer.filename, &file_stat) < 0)
-    {
-        return SW_FALSE;
-    }
-    if (file_stat.st_size == 0)
-    {
-        return SW_FALSE;
-    }
-    if ((file_stat.st_mode & S_IFMT) != S_IFREG)
-    {
-        return SW_FALSE;
-    }
-
-    char header_buffer[1024];
-    swSendData response;
-    response.info.fd = conn->session_id;
-
-    response.info.type = SW_EVENT_TCP;
-
-    p = request->buffer->str + request->url_offset + request->url_length + 10;
-    char *pe = request->buffer->str + request->header_length;
-
-    char *date_if_modified_since = NULL;
-    int length_if_modified_since = 0;
-
-    int state = 0;
-    for (; p < pe; p++)
-    {
-        switch(state)
-        {
-        case 0:
-            if (strncasecmp(p, SW_STRL("If-Modified-Since")) == 0)
-            {
-                p += sizeof("If-Modified-Since");
-                state = 1;
-            }
-            break;
-        case 1:
-            if (!isspace(*p))
-            {
-                date_if_modified_since = p;
-                state = 2;
-            }
-            break;
-        case 2:
-            if (strncasecmp(p, SW_STRL("\r\n")) == 0)
-            {
-                length_if_modified_since = p - date_if_modified_since;
-                goto check_modify_date;
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
-    char date_[64];
-    struct tm *tm1;
-
-    check_modify_date: tm1 = gmtime(&serv->gs->now);
-    strftime(date_, sizeof(date_), "%a, %d %b %Y %H:%M:%S %Z", tm1);
-
-    char date_last_modified[64];
-#ifdef __MACH__
-    time_t file_mtime = file_stat.st_mtimespec.tv_sec;
-#elif defined(_WIN32)
-	time_t file_mtime = file_stat.st_mtime;
-#else
-    time_t file_mtime = file_stat.st_mtim.tv_sec;
-#endif
-
-    struct tm *tm2 = gmtime(&file_mtime);
-    strftime(date_last_modified, sizeof(date_last_modified), "%a, %d %b %Y %H:%M:%S %Z", tm2);
-
-    if (state == 2)
-    {
-        struct tm tm3;
-        char date_tmp[64];
-        memcpy(date_tmp, date_if_modified_since, length_if_modified_since);
-        date_tmp[length_if_modified_since] = 0;
-
-        char *date_format = NULL;
-
-        if (strptime(date_tmp, SW_HTTP_RFC1123_DATE_GMT, &tm3) != NULL)
-        {
-            date_format = SW_HTTP_RFC1123_DATE_GMT;
-        }
-        else if (strptime(date_tmp, SW_HTTP_RFC1123_DATE_UTC, &tm3) != NULL)
-        {
-            date_format = SW_HTTP_RFC1123_DATE_UTC;
-        }
-        else if (strptime(date_tmp, SW_HTTP_RFC850_DATE, &tm3) != NULL)
-        {
-            date_format = SW_HTTP_RFC850_DATE;
-        }
-        else if (strptime(date_tmp, SW_HTTP_ASCTIME_DATE, &tm3) != NULL)
-        {
-            date_format = SW_HTTP_ASCTIME_DATE;
-        }
-        if (date_format && mktime(&tm3) - (int) timezone >= file_mtime)
-        {
-            response.length = response.info.len = sw_snprintf(header_buffer, sizeof(header_buffer),
-                    "HTTP/1.1 304 Not Modified\r\n"
-                    "%s"
-                    "Date: %s\r\n"
-                    "Last-Modified: %s\r\n"
-                    "Server: %s\r\n\r\n",
-                    request->keep_alive ? "Connection: keep-alive\r\n" : "",
-                    date_,
-                    date_last_modified,
-                    SW_HTTP_SERVER_SOFTWARE
-            );
-            response.data = header_buffer;
-            swServer_master_send(serv, &response);
-            goto _finish;
-        }
-    }
-
-    response.length = response.info.len = sw_snprintf(header_buffer, sizeof(header_buffer),
-            "HTTP/1.1 200 OK\r\n"
-            "%s"
-            "Content-Length: %ld\r\n"
-            "Content-Type: %s\r\n"
-            "Date: %s\r\n"
-            "Last-Modified: %s\r\n"
-            "Server: %s\r\n\r\n",
-            request->keep_alive ? "Connection: keep-alive\r\n" : "",
-            (long) file_stat.st_size,
-            swoole_get_mime_type(buffer.filename),
-            date_,
-            date_last_modified,
-            SW_HTTP_SERVER_SOFTWARE);
-
-    response.data = header_buffer;
-
-#ifdef HAVE_TCP_NOPUSH
-    if (conn->tcp_nopush == 0)
-    {
-        if (swSocket_tcp_nopush(conn->fd, 1) == -1)
-        {
-            swWarn("swSocket_tcp_nopush() failed. Error: %s[%d]", strerror(errno), errno);
-        }
-        conn->tcp_nopush = 1;
-    }
-#endif
-    swServer_master_send(serv, &response);
-
-    buffer.offset = 0;
-    buffer.length = file_stat.st_size;
-
-    response.info.type = SW_EVENT_SENDFILE;
-    response.length = response.info.len = sizeof(swSendFile_request) + buffer.length + 1;
-    response.data = (void*) &buffer;
-
-    swServer_master_send(serv, &response);
-
-    _finish:
-    if (!request->keep_alive)
-    {
-        response.info.type = SW_EVENT_CLOSE;
-        response.length = 0;
-        response.data = NULL;
-        swServer_master_send(serv, &response);
-    }
-
-    return SW_TRUE;
-}

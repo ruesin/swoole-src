@@ -10,13 +10,13 @@ go(function () {
     $redis = new Co\Redis();
     $redis->connect(REDIS_SERVER_HOST, REDIS_SERVER_PORT);
     $val = $redis->psubscribe(['test.*']);
-    assert($val);
+    Assert::assert($val);
     $val = $redis->recv();
-    assert($val[0] == 'psubscribe' && $val[1] == 'test.*');
+    Assert::assert($val[0] == 'psubscribe' && $val[1] == 'test.*');
 
     for ($i = 0; $i < MAX_REQUESTS; $i++) {
         $val = $redis->recv();
-        assert($val and $val[0] == 'pmessage');
+        Assert::eq($val and $val[0], 'pmessage');
     }
 
     $redis->close();
@@ -29,7 +29,7 @@ go(function () {
 
     for ($i = 0; $i < MAX_REQUESTS; $i++) {
         $ret = $redis->publish('test.a', 'hello-' . $i);
-        assert($ret);
+        Assert::assert($ret);
     }
 });
 

@@ -33,6 +33,7 @@ enum swErrorCode
     SW_ERROR_NAME_TOO_LONG,
     SW_ERROR_INVALID_PARAMS,
     SW_ERROR_QUEUE_FULL,
+    SW_ERROR_OPERATION_NOT_SUPPORT,
 
     SW_ERROR_FILE_NOT_EXIST = 700,
     SW_ERROR_FILE_TOO_LARGE,
@@ -62,6 +63,7 @@ enum swErrorCode
     SW_ERROR_SSL_BAD_PROTOCOL,
 
     SW_ERROR_PACKAGE_LENGTH_TOO_LARGE = 1201,
+    SW_ERROR_PACKAGE_LENGTH_NOT_FOUND,
     SW_ERROR_DATA_LENGTH_TOO_LARGE,
 
     /**
@@ -144,7 +146,7 @@ enum swErrorCode
     SW_ERROR_END
 };
 
-const char* swoole_strerror(enum swErrorCode code);
-void swoole_throw_error(enum swErrorCode code);
+const char* swoole_strerror(int code);
+void swoole_throw_error(int code);
 
 #endif /* SW_ERRNO_H_ */

@@ -1,5 +1,5 @@
 --TEST--
-swoole_runtime: Co::fread
+swoole_runtime/file_hook: fread
 --SKIPIF--
 <?php
 require __DIR__ . '/../../include/skipif.inc';
@@ -16,8 +16,8 @@ go(function () {
     $data = Co::fread($fp, 1024);
     echo "read\n";
     swoole\runtime::enableCoroutine(false);
-    assert(!empty($data));
-    assert(md5($data) === md5_file(__FILE__));
+    Assert::assert(!empty($data));
+    Assert::eq(md5($data), md5_file(__FILE__));
 });
 
 swoole_event_wait();
@@ -25,4 +25,3 @@ swoole_event_wait();
 --EXPECT--
 open
 read
-
